@@ -5,7 +5,7 @@ import {
   MaxLength,
   MinLength,
 } from 'class-validator';
-import { TaskStatus } from '../schemas/task.schema';
+import { TaskStatus } from '../../schemas/tasks/task.schema';
 
 export class CreateTaskDto {
   @IsString()

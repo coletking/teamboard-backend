@@ -9,8 +9,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto } from './dto/create-project.dto';
-import { UpdateProjectDto } from './dto/update-project.dto';
+import { CreateProjectDto } from '../../dto/projects/create-project.dto';
+import { UpdateProjectDto } from '../../dto/projects/update-project.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
@@ -29,15 +29,20 @@ export class ProjectsController {
 
   @Get()
   findAll(@CurrentUser('userId') userId: string) {
-    return this.projectsService.findAllForOwner(userId);
+    return this.projectsService.findAllForUser(userId);
   }
 
   @Get(':id')
-  findOne(
+  async findOne(
     @CurrentUser('userId') userId: string,
     @Param('id') id: string,
   ) {
-    return this.projectsService.findOneForOwner(id, userId);
+    const project = await this.projectsService.findForMember(id, userId);
+    // Surface the caller's role so the UI can gate admin-only actions.
+    return {
+      ...project.toObject(),
+      myRole: this.projectsService.getRole(project, userId),
+    };
   }
 
   @Patch(':id')

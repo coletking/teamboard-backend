@@ -4,12 +4,10 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
-import * as bcrypt from 'bcrypt';
 import { UsersService } from '../users/users.service';
-import { SignupDto } from './dto/signup.dto';
-import { LoginDto } from './dto/login.dto';
-
-const BCRYPT_ROUNDS = 10;
+import { SignupDto } from '../../dto/auth/signup.dto';
+import { LoginDto } from '../../dto/auth/login.dto';
+import { comparePassword } from '../../common/utils/password.util';
 
 export interface AuthResult {
   accessToken: string;
@@ -17,9 +15,9 @@ export interface AuthResult {
 }
 
 /**
- * Business logic for authentication: hashing, credential verification and
- * issuing JWTs. Controllers stay thin and never touch bcrypt or the token
- * service directly.
+ * Orchestrates the authentication flow: it delegates user storage/hashing to
+ * UsersService and is responsible for credential verification and issuing JWTs.
+ * Controllers stay thin and never touch the token service directly.
  */
 @Injectable()
 export class AuthService {
@@ -33,19 +31,14 @@ export class AuthService {
     if (existing) {
       throw new ConflictException('Email is already registered');
     }
-    const passwordHash = await bcrypt.hash(dto.password, BCRYPT_ROUNDS);
-    const user = await this.usersService.create({
-      name: dto.name,
-      email: dto.email,
-      passwordHash,
-    });
+    const user = await this.usersService.create(dto);
     return this.buildResult(user.id, user.name, user.email);
   }
 
   async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.usersService.findByEmail(dto.email, true);
     // Same error for "no user" and "wrong password" to avoid user enumeration.
-    if (!user || !(await bcrypt.compare(dto.password, user.passwordHash))) {
+    if (!user || !(await comparePassword(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials');
     }
     return this.buildResult(user.id, user.name, user.email);

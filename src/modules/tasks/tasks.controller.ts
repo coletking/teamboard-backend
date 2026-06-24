@@ -9,16 +9,15 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto } from './dto/create-task.dto';
-import { UpdateTaskDto } from './dto/update-task.dto';
+import { CreateTaskDto } from '../../dto/tasks/create-task.dto';
+import { UpdateTaskDto } from '../../dto/tasks/update-task.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
 /**
  * Tasks live under a project for creation/listing
  * (`/projects/:projectId/tasks`) but are addressed directly for item
- * operations (`/tasks/:id`), keeping URLs intuitive without nesting every
- * route.
+ * operations (`/tasks/:id`). Access is governed by project membership.
  */
 @Controller()
 @UseGuards(JwtAuthGuard)

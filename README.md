@@ -29,25 +29,40 @@ Each feature is a self-contained NestJS module following an **MVC-per-feature**
 layout — controller (C), schema/model (M), service (business logic), plus its
 DTOs and the module that wires them together.
 
+DTOs and schemas are centralised under `src/dto/` and `src/schemas/` (organised
+by feature); controllers/services/modules stay per-feature under `src/modules/`.
+
 ```
 src/
 ├── main.ts                     # bootstrap: helmet, sanitize, validation, CORS, prefix
 ├── app.module.ts               # root module — config, db, throttler, events, features
 ├── health.controller.ts        # GET /api/health liveness probe
-├── config/
-│   ├── configuration.ts        # typed config object from env
-│   └── env.validation.ts       # Joi schema — app refuses to boot if env is invalid
+├── config/                     # configuration.ts + env.validation.ts (Joi)
 ├── common/
 │   ├── decorators/current-user.decorator.ts
 │   ├── guards/jwt-auth.guard.ts
 │   ├── filters/all-exceptions.filter.ts
-│   └── middleware/mongo-sanitize.middleware.ts
+│   ├── middleware/mongo-sanitize.middleware.ts
+│   └── utils/password.util.ts          # bcrypt hash/compare (single source)
+├── schemas/                    # the "M": users/, projects/, tasks/ Mongoose schemas
+├── dto/                        # input contracts: auth/, projects/, tasks/
 └── modules/
-    ├── users/      # schema, service, module           (owns user data)
-    ├── auth/       # controller, service, module, dto, strategy
-    ├── projects/   # controller, service, module, schema, dto
-    └── tasks/      # controller, service, module, schema, dto
+    ├── users/        # service + module (owns user data)
+    ├── auth/         # controller, service, module, jwt strategy
+    ├── projects/     # projects + members controllers, service, module
+    ├── tasks/        # controller, service, module (member-scoped)
+    └── dashboard/    # controller, service, module (stats aggregation)
 ```
+
+See [`FILE_GUIDE.md`](./FILE_GUIDE.md) for a file-by-file explanation.
+
+### Roles & membership
+
+A project has **members**, each with a role. The creator is the **admin**;
+admins can invite/remove members and delete the project. Invited **members** can
+view the project and fully manage its tasks. Inviting an email with no account
+creates one with `DEFAULT_INVITE_PASSWORD`, so they can log in and see only the
+projects they belong to.
 
 ---
 
@@ -84,6 +99,20 @@ Base URL: `http://localhost:3000/api`
 | DELETE | `/tasks/:id`                  | —                                      | Delete a task         |
 
 `status` ∈ `todo` | `in_progress` | `done`.
+
+### Members (all require JWT)
+
+| Method | Endpoint                              | Role  | Description                  |
+| ------ | ------------------------------------- | ----- | ---------------------------- |
+| GET    | `/projects/:projectId/members`        | any   | List members + roles         |
+| POST   | `/projects/:projectId/members`        | admin | Invite by email `{ email }`  |
+| DELETE | `/projects/:projectId/members/:userId`| admin | Remove a member              |
+
+### Dashboard (requires JWT)
+
+| Method | Endpoint     | Description                                            |
+| ------ | ------------ | ----------------------------------------------------- |
+| GET    | `/dashboard` | Stats: project/task counts, by-status, per-project    |
 
 Authenticated requests must send `Authorization: Bearer <accessToken>`.
 
@@ -144,6 +173,7 @@ docker compose up --build      # Mongo + API together
 | `CORS_ORIGIN`    | no       | `*`                       | Allowed frontend origin                  |
 | `JWT_SECRET`     | **yes**  | —                         | JWT signing secret (min 16 chars)        |
 | `JWT_EXPIRES_IN` | no       | `1d`                      | Token lifetime                           |
+| `DEFAULT_INVITE_PASSWORD` | no | `TeamBoard123!`        | Password for users created via invite    |
 | `THROTTLE_TTL`   | no       | `60`                      | Rate-limit window (seconds)              |
 | `THROTTLE_LIMIT` | no       | `100`                     | Max requests per window per IP           |
 

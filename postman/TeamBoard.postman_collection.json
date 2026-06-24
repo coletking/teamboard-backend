@@ -8,7 +8,8 @@
     { "key": "baseUrl", "value": "http://localhost:3000/api" },
     { "key": "accessToken", "value": "" },
     { "key": "projectId", "value": "" },
-    { "key": "taskId", "value": "" }
+    { "key": "taskId", "value": "" },
+    { "key": "memberUserId", "value": "" }
   ],
   "auth": {
     "type": "bearer",
@@ -22,6 +23,58 @@
         "header": [],
         "url": "{{baseUrl}}/health"
       }
+    },
+    {
+      "name": "Dashboard",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/dashboard"
+      }
+    },
+    {
+      "name": "Members",
+      "item": [
+        {
+          "name": "List Members",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/projects/{{projectId}}/members"
+          }
+        },
+        {
+          "name": "Invite Member",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.member && res.member.id) { pm.collectionVariables.set('memberUserId', res.member.id); }"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"teammate@example.com\"\n}"
+            },
+            "url": "{{baseUrl}}/projects/{{projectId}}/members"
+          }
+        },
+        {
+          "name": "Remove Member",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": "{{baseUrl}}/projects/{{projectId}}/members/{{memberUserId}}"
+          }
+        }
+      ]
     },
     {
       "name": "Auth",

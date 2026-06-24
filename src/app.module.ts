@@ -11,6 +11,7 @@ import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { TasksModule } from './modules/tasks/tasks.module';
+import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
@@ -45,6 +46,7 @@ import { TasksModule } from './modules/tasks/tasks.module';
     AuthModule,
     ProjectsModule,
     TasksModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
   providers: [

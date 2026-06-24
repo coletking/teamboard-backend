@@ -1,14 +1,21 @@
 import {
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
+import { ConfigService } from '@nestjs/config';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Model, Types } from 'mongoose';
-import { Project, ProjectDocument } from './schemas/project.schema';
-import { CreateProjectDto } from './dto/create-project.dto';
-import { UpdateProjectDto } from './dto/update-project.dto';
+import {
+  Project,
+  ProjectDocument,
+  ProjectRole,
+} from '../../schemas/projects/project.schema';
+import { CreateProjectDto } from '../../dto/projects/create-project.dto';
+import { UpdateProjectDto } from '../../dto/projects/update-project.dto';
+import { UsersService } from '../users/users.service';
 
 /** Emitted when a project is deleted so other modules (Tasks) can react. */
 export const PROJECT_DELETED_EVENT = 'project.deleted';
@@ -16,65 +23,187 @@ export interface ProjectDeletedPayload {
   projectId: string;
 }
 
+export interface MemberView {
+  id: string;
+  name: string;
+  email: string;
+  role: ProjectRole;
+}
+
 @Injectable()
 export class ProjectsService {
   constructor(
     @InjectModel(Project.name)
     private readonly projectModel: Model<ProjectDocument>,
+    private readonly usersService: UsersService,
+    private readonly config: ConfigService,
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
+  /** Create a project; the creator is recorded as owner and an ADMIN member. */
   create(ownerId: string, dto: CreateProjectDto): Promise<ProjectDocument> {
+    const owner = new Types.ObjectId(ownerId);
     return this.projectModel.create({
       ...dto,
-      owner: new Types.ObjectId(ownerId),
+      owner,
+      members: [{ user: owner, role: ProjectRole.ADMIN }],
     });
   }
 
-  findAllForOwner(ownerId: string): Promise<ProjectDocument[]> {
+  /** Every project the user is a member of (admin or member). */
+  findAllForUser(userId: string): Promise<ProjectDocument[]> {
     return this.projectModel
-      .find({ owner: new Types.ObjectId(ownerId) })
+      .find({ 'members.user': new Types.ObjectId(userId) })
       .sort({ createdAt: -1 })
       .exec();
   }
 
-  /**
-   * Fetch a single project and assert the caller owns it. Reused by the Tasks
-   * module as the authorization gate for every task operation.
-   */
-  async findOneForOwner(
-    id: string,
-    ownerId: string,
-  ): Promise<ProjectDocument> {
+  /** Fetch a project, asserting the user is a member. The membership gate
+   *  reused by the Tasks module for task authorization. */
+  async findForMember(id: string, userId: string): Promise<ProjectDocument> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Project not found');
     }
     const project = await this.projectModel.findById(id).exec();
     if (!project) throw new NotFoundException('Project not found');
-    if (project.owner.toString() !== ownerId) {
+    if (!this.isMember(project, userId)) {
       throw new ForbiddenException('Access denied');
+    }
+    return project;
+  }
+
+  /** Fetch a project, asserting the user is an ADMIN of it. */
+  async findForAdmin(id: string, userId: string): Promise<ProjectDocument> {
+    const project = await this.findForMember(id, userId);
+    if (this.roleOf(project, userId) !== ProjectRole.ADMIN) {
+      throw new ForbiddenException('Admin privileges required');
     }
     return project;
   }
 
   async update(
     id: string,
-    ownerId: string,
+    userId: string,
     dto: UpdateProjectDto,
   ): Promise<ProjectDocument> {
-    const project = await this.findOneForOwner(id, ownerId);
+    const project = await this.findForAdmin(id, userId);
     Object.assign(project, dto);
     return project.save();
   }
 
-  async remove(id: string, ownerId: string): Promise<{ id: string; deleted: true }> {
-    const project = await this.findOneForOwner(id, ownerId);
+  async remove(
+    id: string,
+    userId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    const project = await this.findForAdmin(id, userId);
     await project.deleteOne();
-    // Decoupled cascade: Tasks module listens for this and removes its data.
-    // In a microservice split this becomes a real message-broker event.
+    // Decoupled cascade: Tasks module listens and removes the project's tasks.
     this.eventEmitter.emit(PROJECT_DELETED_EVENT, {
       projectId: id,
     } satisfies ProjectDeletedPayload);
     return { id, deleted: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Members
+  // ---------------------------------------------------------------------------
+
+  /** List a project's members with their user details (any member may view). */
+  async listMembers(id: string, userId: string): Promise<MemberView[]> {
+    const project = await this.findForMember(id, userId);
+    await project.populate<{
+      members: { user: { _id: Types.ObjectId; name: string; email: string }; role: ProjectRole }[];
+    }>('members.user', 'name email');
+
+    return project.members.map((m) => {
+      const user = m.user as unknown as {
+        _id: Types.ObjectId;
+        name: string;
+        email: string;
+      };
+      return {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        role: m.role,
+      };
+    });
+  }
+
+  /**
+   * Admin-only. Adds a teammate by email. If no account exists, one is created
+   * with the configured default password. Returns the member and whether a new
+   * account was created (so the UI can surface the default password).
+   */
+  async inviteMember(
+    id: string,
+    adminId: string,
+    email: string,
+  ): Promise<{ member: MemberView; created: boolean }> {
+    const project = await this.findForAdmin(id, adminId);
+    const defaultPassword = this.config.get<string>('defaultInvitePassword')!;
+    const { user, created } = await this.usersService.findOrCreate(
+      email,
+      defaultPassword,
+    );
+    if (this.isMember(project, user.id)) {
+      throw new ConflictException('User is already a member of this project');
+    }
+    project.members.push({
+      user: new Types.ObjectId(user.id),
+      role: ProjectRole.MEMBER,
+    });
+    await project.save();
+    return {
+      member: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: ProjectRole.MEMBER,
+      },
+      created,
+    };
+  }
+
+  /** Admin-only. Remove a member (the owner cannot be removed). */
+  async removeMember(
+    id: string,
+    adminId: string,
+    memberUserId: string,
+  ): Promise<{ id: string; removed: true }> {
+    const project = await this.findForAdmin(id, adminId);
+    if (project.owner.toString() === memberUserId) {
+      throw new ForbiddenException('The project owner cannot be removed');
+    }
+    const before = project.members.length;
+    project.members = project.members.filter(
+      (m) => m.user.toString() !== memberUserId,
+    );
+    if (project.members.length === before) {
+      throw new NotFoundException('Member not found');
+    }
+    await project.save();
+    return { id: memberUserId, removed: true };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Helpers (also used by the dashboard)
+  // ---------------------------------------------------------------------------
+
+  /** The user's role in a project, or undefined if not a member. */
+  getRole(project: ProjectDocument, userId: string): ProjectRole | undefined {
+    return this.roleOf(project, userId);
+  }
+
+  private isMember(project: ProjectDocument, userId: string): boolean {
+    return project.members.some((m) => m.user.toString() === userId.toString());
+  }
+
+  private roleOf(
+    project: ProjectDocument,
+    userId: string,
+  ): ProjectRole | undefined {
+    return project.members.find((m) => m.user.toString() === userId.toString())
+      ?.role;
   }
 }

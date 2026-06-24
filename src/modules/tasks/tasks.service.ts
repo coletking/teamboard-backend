@@ -2,14 +2,24 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { OnEvent } from '@nestjs/event-emitter';
 import { Model, Types } from 'mongoose';
-import { Task, TaskDocument } from './schemas/task.schema';
-import { CreateTaskDto } from './dto/create-task.dto';
-import { UpdateTaskDto } from './dto/update-task.dto';
+import {
+  Task,
+  TaskDocument,
+  TaskStatus,
+} from '../../schemas/tasks/task.schema';
+import { CreateTaskDto } from '../../dto/tasks/create-task.dto';
+import { UpdateTaskDto } from '../../dto/tasks/update-task.dto';
 import {
   PROJECT_DELETED_EVENT,
   ProjectsService,
 } from '../projects/projects.service';
 import type { ProjectDeletedPayload } from '../projects/projects.service';
+
+export interface StatusBreakdown {
+  todo: number;
+  in_progress: number;
+  done: number;
+}
 
 @Injectable()
 export class TasksService {
@@ -18,62 +28,101 @@ export class TasksService {
     private readonly projectsService: ProjectsService,
   ) {}
 
-  /** Creating a task first asserts the caller owns the parent project. */
+  /** Any project member may create a task. */
   async create(
     projectId: string,
-    ownerId: string,
+    userId: string,
     dto: CreateTaskDto,
   ): Promise<TaskDocument> {
-    await this.projectsService.findOneForOwner(projectId, ownerId);
+    await this.projectsService.findForMember(projectId, userId);
     return this.taskModel.create({
       ...dto,
       project: new Types.ObjectId(projectId),
-      owner: new Types.ObjectId(ownerId),
+      createdBy: new Types.ObjectId(userId),
     });
   }
 
   async findAllForProject(
     projectId: string,
-    ownerId: string,
+    userId: string,
   ): Promise<TaskDocument[]> {
-    await this.projectsService.findOneForOwner(projectId, ownerId);
+    await this.projectsService.findForMember(projectId, userId);
     return this.taskModel
       .find({ project: new Types.ObjectId(projectId) })
       .sort({ createdAt: -1 })
       .exec();
   }
 
-  async findOne(id: string, ownerId: string): Promise<TaskDocument> {
+  /** Fetch a task, gating on membership of its parent project. */
+  async findOne(id: string, userId: string): Promise<TaskDocument> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Task not found');
     }
-    const task = await this.taskModel
-      .findOne({ _id: id, owner: new Types.ObjectId(ownerId) })
-      .exec();
+    const task = await this.taskModel.findById(id).exec();
     if (!task) throw new NotFoundException('Task not found');
+    await this.projectsService.findForMember(task.project.toString(), userId);
     return task;
   }
 
   async update(
     id: string,
-    ownerId: string,
+    userId: string,
     dto: UpdateTaskDto,
   ): Promise<TaskDocument> {
-    const task = await this.findOne(id, ownerId);
+    const task = await this.findOne(id, userId);
     Object.assign(task, dto);
     return task.save();
   }
 
-  async remove(id: string, ownerId: string): Promise<{ id: string; deleted: true }> {
-    const task = await this.findOne(id, ownerId);
+  async remove(
+    id: string,
+    userId: string,
+  ): Promise<{ id: string; deleted: true }> {
+    const task = await this.findOne(id, userId);
     await task.deleteOne();
     return { id, deleted: true };
   }
 
+  // ---------------------------------------------------------------------------
+  // Aggregations for the dashboard
+  // ---------------------------------------------------------------------------
+
+  /** Count tasks by status across a set of projects. */
+  async countByStatusForProjects(
+    projectIds: Types.ObjectId[],
+  ): Promise<StatusBreakdown> {
+    const rows = await this.taskModel.aggregate<{
+      _id: TaskStatus;
+      count: number;
+    }>([
+      { $match: { project: { $in: projectIds } } },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
+    ]);
+
+    const breakdown: StatusBreakdown = { todo: 0, in_progress: 0, done: 0 };
+    for (const row of rows) {
+      breakdown[row._id] = row.count;
+    }
+    return breakdown;
+  }
+
+  /** Map of projectId -> task count, for a set of projects. */
+  async countPerProject(
+    projectIds: Types.ObjectId[],
+  ): Promise<Map<string, number>> {
+    const rows = await this.taskModel.aggregate<{
+      _id: Types.ObjectId;
+      count: number;
+    }>([
+      { $match: { project: { $in: projectIds } } },
+      { $group: { _id: '$project', count: { $sum: 1 } } },
+    ]);
+    return new Map(rows.map((r) => [r._id.toString(), r.count]));
+  }
+
   /**
    * Reacts to a project deletion by removing its tasks. Decoupling this via an
-   * event (rather than a direct call from ProjectsService) keeps the modules
-   * independent and mirrors how they would communicate across services.
+   * event keeps the modules independent and mirrors cross-service messaging.
    */
   @OnEvent(PROJECT_DELETED_EVENT)
   async handleProjectDeleted(payload: ProjectDeletedPayload): Promise<void> {
