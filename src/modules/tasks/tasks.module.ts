@@ -8,12 +8,12 @@ import { ProjectsModule } from '../projects/projects.module';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Task.name, schema: TaskSchema }]),
-    // Brings in ProjectsService for membership checks on the parent project.
+
     ProjectsModule,
   ],
   controllers: [TasksController],
   providers: [TasksService],
-  // Exported so the Dashboard module can aggregate task counts.
+
   exports: [TasksService],
 })
 export class TasksModule {}

@@ -18,7 +18,6 @@ import { CreateProjectDto } from '../../dto/projects/create-project.dto';
 import { UpdateProjectDto } from '../../dto/projects/update-project.dto';
 import { UsersService } from '../users/users.service';
 
-/** Emitted when a project is deleted so other modules (Tasks) can react. */
 export const PROJECT_DELETED_EVENT = 'project.deleted';
 export interface ProjectDeletedPayload {
   projectId: string;
@@ -41,7 +40,6 @@ export class ProjectsService {
     private readonly eventEmitter: EventEmitter2,
   ) {}
 
-  /** Create a project; the creator is recorded as owner and an ADMIN member. */
   create(ownerId: string, dto: CreateProjectDto): Promise<ProjectDocument> {
     const owner = new Types.ObjectId(ownerId);
     return this.projectModel.create({
@@ -51,7 +49,6 @@ export class ProjectsService {
     });
   }
 
-  /** Every project the user is a member of (admin or member). */
   findAllForUser(userId: string): Promise<ProjectDocument[]> {
     return this.projectModel
       .find({ 'members.user': new Types.ObjectId(userId) })
@@ -59,8 +56,6 @@ export class ProjectsService {
       .exec();
   }
 
-  /** Fetch a project, asserting the user is a member. The membership gate
-   *  reused by the Tasks module for task authorization. */
   async findForMember(id: string, userId: string): Promise<ProjectDocument> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Project not found');
@@ -73,7 +68,6 @@ export class ProjectsService {
     return project;
   }
 
-  /** Fetch a project, asserting the user is an ADMIN of it. */
   async findForAdmin(id: string, userId: string): Promise<ProjectDocument> {
     const project = await this.findForMember(id, userId);
     if (this.roleOf(project, userId) !== ProjectRole.ADMIN) {
@@ -98,22 +92,20 @@ export class ProjectsService {
   ): Promise<{ id: string; deleted: true }> {
     const project = await this.findForAdmin(id, userId);
     await project.deleteOne();
-    // Decoupled cascade: Tasks module listens and removes the project's tasks.
+
     this.eventEmitter.emit(PROJECT_DELETED_EVENT, {
       projectId: id,
     } satisfies ProjectDeletedPayload);
     return { id, deleted: true };
   }
 
-  // ---------------------------------------------------------------------------
-  // Members
-  // ---------------------------------------------------------------------------
-
-  /** List a project's members with their user details (any member may view). */
   async listMembers(id: string, userId: string): Promise<MemberView[]> {
     const project = await this.findForMember(id, userId);
     await project.populate<{
-      members: { user: { _id: Types.ObjectId; name: string; email: string }; role: ProjectRole }[];
+      members: {
+        user: { _id: Types.ObjectId; name: string; email: string };
+        role: ProjectRole;
+      }[];
     }>('members.user', 'name email');
 
     return project.members.map((m) => {
@@ -131,11 +123,6 @@ export class ProjectsService {
     });
   }
 
-  /**
-   * Admin-only. Adds a teammate by email. If no account exists, one is created
-   * with the configured default password. Returns the member and whether a new
-   * account was created (so the UI can surface the default password).
-   */
   async inviteMember(
     id: string,
     adminId: string,
@@ -147,7 +134,7 @@ export class ProjectsService {
       email,
       defaultPassword,
     );
-    // An admin is already a member — block inviting yourself with a clear error.
+
     if (user.id === adminId) {
       throw new BadRequestException('You cannot invite yourself');
     }
@@ -170,7 +157,6 @@ export class ProjectsService {
     };
   }
 
-  /** Admin-only. Remove a member (the owner cannot be removed). */
   async removeMember(
     id: string,
     adminId: string,
@@ -191,11 +177,6 @@ export class ProjectsService {
     return { id: memberUserId, removed: true };
   }
 
-  // ---------------------------------------------------------------------------
-  // Helpers (also used by the dashboard)
-  // ---------------------------------------------------------------------------
-
-  /** The user's role in a project, or undefined if not a member. */
   getRole(project: ProjectDocument, userId: string): ProjectRole | undefined {
     return this.roleOf(project, userId);
   }

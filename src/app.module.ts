@@ -15,20 +15,19 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
 
 @Module({
   imports: [
-    // Global, validated configuration.
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
       validationSchema,
     }),
-    // Async Mongo connection driven by config.
+
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         uri: config.get<string>('mongoUri'),
       }),
     }),
-    // Global rate limiting (the "rate limiter" requirement).
+
     ThrottlerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => [
@@ -38,10 +37,9 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
         },
       ],
     }),
-    // In-process pub/sub used for cross-module events (e.g. cascade deletes).
+
     EventEmitterModule.forRoot(),
 
-    // Feature modules.
     UsersModule,
     AuthModule,
     ProjectsModule,
@@ -49,9 +47,6 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
     DashboardModule,
   ],
   controllers: [HealthController],
-  providers: [
-    // Apply the throttler to every route by default.
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
-  ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}

@@ -28,7 +28,6 @@ export class TasksService {
     private readonly projectsService: ProjectsService,
   ) {}
 
-  /** Any project member may create a task. */
   async create(
     projectId: string,
     userId: string,
@@ -53,7 +52,6 @@ export class TasksService {
       .exec();
   }
 
-  /** Fetch a task, gating on membership of its parent project. */
   async findOne(id: string, userId: string): Promise<TaskDocument> {
     if (!Types.ObjectId.isValid(id)) {
       throw new NotFoundException('Task not found');
@@ -83,11 +81,6 @@ export class TasksService {
     return { id, deleted: true };
   }
 
-  // ---------------------------------------------------------------------------
-  // Aggregations for the dashboard
-  // ---------------------------------------------------------------------------
-
-  /** Count tasks by status across a set of projects. */
   async countByStatusForProjects(
     projectIds: Types.ObjectId[],
   ): Promise<StatusBreakdown> {
@@ -106,7 +99,6 @@ export class TasksService {
     return breakdown;
   }
 
-  /** Map of projectId -> task count, for a set of projects. */
   async countPerProject(
     projectIds: Types.ObjectId[],
   ): Promise<Map<string, number>> {
@@ -120,10 +112,6 @@ export class TasksService {
     return new Map(rows.map((r) => [r._id.toString(), r.count]));
   }
 
-  /**
-   * Reacts to a project deletion by removing its tasks. Decoupling this via an
-   * event keeps the modules independent and mirrors cross-service messaging.
-   */
   @OnEvent(PROJECT_DELETED_EVENT)
   async handleProjectDeleted(payload: ProjectDeletedPayload): Promise<void> {
     await this.taskModel

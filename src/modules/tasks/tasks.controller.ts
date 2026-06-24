@@ -14,11 +14,6 @@ import { UpdateTaskDto } from '../../dto/tasks/update-task.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-/**
- * Tasks live under a project for creation/listing
- * (`/projects/:projectId/tasks`) but are addressed directly for item
- * operations (`/tasks/:id`). Access is governed by project membership.
- */
 @Controller()
 @UseGuards(JwtAuthGuard)
 export class TasksController {
@@ -42,10 +37,7 @@ export class TasksController {
   }
 
   @Get('tasks/:id')
-  findOne(
-    @CurrentUser('userId') userId: string,
-    @Param('id') id: string,
-  ) {
+  findOne(@CurrentUser('userId') userId: string, @Param('id') id: string) {
     return this.tasksService.findOne(id, userId);
   }
 
@@ -59,10 +51,7 @@ export class TasksController {
   }
 
   @Delete('tasks/:id')
-  remove(
-    @CurrentUser('userId') userId: string,
-    @Param('id') id: string,
-  ) {
+  remove(@CurrentUser('userId') userId: string, @Param('id') id: string) {
     return this.tasksService.remove(id, userId);
   }
 }

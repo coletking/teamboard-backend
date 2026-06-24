@@ -9,12 +9,12 @@ import { UsersModule } from '../users/users.module';
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: Project.name, schema: ProjectSchema }]),
-    // Needed by invites to find-or-create the invited user.
+
     UsersModule,
   ],
   controllers: [ProjectsController, MembersController],
   providers: [ProjectsService],
-  // Exported so Tasks and Dashboard modules can reuse membership/role logic.
+
   exports: [ProjectsService],
 })
 export class ProjectsModule {}

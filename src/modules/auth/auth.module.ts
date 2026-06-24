@@ -15,8 +15,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
         secret: config.get<string>('jwt.secret'),
-        // `expiresIn` is config-driven (e.g. "1d"); cast past the `ms`
-        // StringValue template-literal type since the value is validated by Joi.
+
         signOptions: {
           expiresIn: (config.get<string>('jwt.expiresIn') ??
             '1d') as JwtSignOptions['expiresIn'],

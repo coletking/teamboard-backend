@@ -18,11 +18,6 @@ export interface DashboardStats {
   projects: DashboardProjectSummary[];
 }
 
-/**
- * Read-only aggregation layer for the dashboard. It orchestrates the Projects
- * and Tasks services rather than touching their collections directly, so the
- * module boundaries stay intact.
- */
 @Injectable()
 export class DashboardService {
   constructor(

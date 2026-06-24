@@ -1,6 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
 
-/** Unauthenticated liveness probe — handy for Docker/health checks & uptime. */
 @Controller('health')
 export class HealthController {
   @Get()

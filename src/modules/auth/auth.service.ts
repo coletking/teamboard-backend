@@ -14,11 +14,6 @@ export interface AuthResult {
   user: { id: string; name: string; email: string };
 }
 
-/**
- * Orchestrates the authentication flow: it delegates user storage/hashing to
- * UsersService and is responsible for credential verification and issuing JWTs.
- * Controllers stay thin and never touch the token service directly.
- */
 @Injectable()
 export class AuthService {
   constructor(
@@ -37,7 +32,7 @@ export class AuthService {
 
   async login(dto: LoginDto): Promise<AuthResult> {
     const user = await this.usersService.findByEmail(dto.email, true);
-    // Same error for "no user" and "wrong password" to avoid user enumeration.
+
     if (!user || !(await comparePassword(dto.password, user.passwordHash))) {
       throw new UnauthorizedException('Invalid credentials');
     }

@@ -4,7 +4,6 @@ import { Model } from 'mongoose';
 import { User, UserDocument } from '../../schemas/users/user.schema';
 import { hashPassword } from '../../common/utils/password.util';
 
-/** MongoDB duplicate-key error code (e.g. violating the unique email index). */
 const DUPLICATE_KEY = 11000;
 
 interface CreateUserInput {
@@ -13,12 +12,6 @@ interface CreateUserInput {
   password: string;
 }
 
-/**
- * Owns all persistence for users, including password hashing on creation.
- * Auth flow (tokens, credential checks) lives in AuthService; project invites
- * reuse `findOrCreate` here. This keeps user storage in one place — clean
- * enough to later extract into a standalone User service.
- */
 @Injectable()
 export class UsersService {
   constructor(
@@ -34,8 +27,6 @@ export class UsersService {
         passwordHash,
       });
     } catch (error) {
-      // The unique index on `email` is the source of truth — translate a
-      // duplicate-key race into a clean 409 instead of a 500.
       if ((error as { code?: number }).code === DUPLICATE_KEY) {
         throw new ConflictException('Email is already registered');
       }
@@ -43,8 +34,10 @@ export class UsersService {
     }
   }
 
-  /** Look up by email; pass `withPassword` when the hash is needed for login. */
-  findByEmail(email: string, withPassword = false): Promise<UserDocument | null> {
+  findByEmail(
+    email: string,
+    withPassword = false,
+  ): Promise<UserDocument | null> {
     const query = this.userModel.findOne({ email: email.toLowerCase() });
     if (withPassword) query.select('+passwordHash');
     return query.exec();
@@ -54,11 +47,6 @@ export class UsersService {
     return this.userModel.findById(id).exec();
   }
 
-  /**
-   * Used by project invites: return the existing user for an email, or create a
-   * new account with the provided default password (deriving a name from the
-   * email local-part).
-   */
   async findOrCreate(
     email: string,
     defaultPassword: string,

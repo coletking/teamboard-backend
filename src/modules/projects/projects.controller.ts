@@ -20,10 +20,7 @@ export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Post()
-  create(
-    @CurrentUser('userId') userId: string,
-    @Body() dto: CreateProjectDto,
-  ) {
+  create(@CurrentUser('userId') userId: string, @Body() dto: CreateProjectDto) {
     return this.projectsService.create(userId, dto);
   }
 
@@ -38,7 +35,7 @@ export class ProjectsController {
     @Param('id') id: string,
   ) {
     const project = await this.projectsService.findForMember(id, userId);
-    // Surface the caller's role so the UI can gate admin-only actions.
+
     return {
       ...project.toObject(),
       myRole: this.projectsService.getRole(project, userId),
@@ -55,10 +52,7 @@ export class ProjectsController {
   }
 
   @Delete(':id')
-  remove(
-    @CurrentUser('userId') userId: string,
-    @Param('id') id: string,
-  ) {
+  remove(@CurrentUser('userId') userId: string, @Param('id') id: string) {
     return this.projectsService.remove(id, userId);
   }
 }

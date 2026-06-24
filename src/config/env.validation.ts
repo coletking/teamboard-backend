@@ -1,10 +1,5 @@
 import * as Joi from 'joi';
 
-/**
- * Fail-fast validation of the environment. If a required variable is missing
- * or malformed the application refuses to boot, surfacing config errors
- * immediately instead of at request time.
- */
 export const validationSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test')

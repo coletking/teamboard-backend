@@ -10,18 +10,15 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   const config = app.get(ConfigService);
 
-  // --- Security & hardening ---
-  app.use(helmet()); // secure HTTP headers
-  app.use(mongoSanitize()); // strip NoSQL operator-injection from body/params
+  app.use(helmet());
+  app.use(mongoSanitize());
   app.enableCors({
     origin: config.get<string>('corsOrigin'),
     credentials: true,
   });
 
-  // All routes are served under /api.
   app.setGlobalPrefix('api');
 
-  // Global validation: reject unknown fields, coerce types, enforce DTOs.
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -31,7 +28,6 @@ async function bootstrap() {
     }),
   );
 
-  // Uniform error responses + 5xx logging.
   app.useGlobalFilters(new AllExceptionsFilter());
 
   const port = config.get<number>('port') ?? 3000;

@@ -8,10 +8,6 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 
-/**
- * Catch-all filter that normalises every error into a consistent JSON shape
- * and logs unexpected (5xx) failures with their stack trace.
- */
 @Catch()
 export class AllExceptionsFilter implements ExceptionFilter {
   private readonly logger = new Logger(AllExceptionsFilter.name);

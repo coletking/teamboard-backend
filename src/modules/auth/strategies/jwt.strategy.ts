@@ -9,10 +9,6 @@ interface JwtPayload {
   email: string;
 }
 
-/**
- * Validates the bearer token signature/expiry and maps the JWT payload to the
- * `AuthUser` that downstream controllers receive via `@CurrentUser()`.
- */
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(config: ConfigService) {

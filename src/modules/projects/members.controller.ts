@@ -12,10 +12,6 @@ import { InviteMemberDto } from '../../dto/projects/invite-member.dto';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CurrentUser } from '../../common/decorators/current-user.decorator';
 
-/**
- * Member management for a project. Listing is open to any member; inviting and
- * removing are admin-only (enforced in ProjectsService).
- */
 @Controller('projects/:projectId/members')
 @UseGuards(JwtAuthGuard)
 export class MembersController {
