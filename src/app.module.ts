@@ -2,11 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
-import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_GUARD } from '@nestjs/core';
 import configuration from './config/configuration';
 import { validationSchema } from './config/env.validation';
 import { HealthController } from './health.controller';
+import { EventsModule } from './events/events.module';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -38,7 +38,7 @@ import { DashboardModule } from './modules/dashboard/dashboard.module';
       ],
     }),
 
-    EventEmitterModule.forRoot(),
+    EventsModule,
 
     UsersModule,
     AuthModule,

@@ -9,6 +9,7 @@ export default () => ({
   },
 
   defaultInvitePassword: process.env.DEFAULT_INVITE_PASSWORD ?? 'TeamBoard123!',
+  redisUrl: process.env.REDIS_URL,
   throttle: {
     ttl: parseInt(process.env.THROTTLE_TTL ?? '60', 10),
     limit: parseInt(process.env.THROTTLE_LIMIT ?? '100', 10),

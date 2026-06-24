@@ -1,6 +1,5 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
-import { OnEvent } from '@nestjs/event-emitter';
 import { Model, Types } from 'mongoose';
 import {
   Task,
@@ -9,11 +8,12 @@ import {
 } from '../../schemas/tasks/task.schema';
 import { CreateTaskDto } from '../../dto/tasks/create-task.dto';
 import { UpdateTaskDto } from '../../dto/tasks/update-task.dto';
+import { ProjectsService } from '../projects/projects.service';
+import { EventBus } from '../../events/event-bus.service';
 import {
   PROJECT_DELETED_EVENT,
-  ProjectsService,
-} from '../projects/projects.service';
-import type { ProjectDeletedPayload } from '../projects/projects.service';
+  ProjectDeletedPayload,
+} from '../../events/events.constants';
 
 export interface StatusBreakdown {
   todo: number;
@@ -22,11 +22,18 @@ export interface StatusBreakdown {
 }
 
 @Injectable()
-export class TasksService {
+export class TasksService implements OnModuleInit {
   constructor(
     @InjectModel(Task.name) private readonly taskModel: Model<TaskDocument>,
     private readonly projectsService: ProjectsService,
+    private readonly eventBus: EventBus,
   ) {}
+
+  onModuleInit(): void {
+    this.eventBus.on<ProjectDeletedPayload>(PROJECT_DELETED_EVENT, (payload) =>
+      this.handleProjectDeleted(payload),
+    );
+  }
 
   async create(
     projectId: string,
@@ -112,7 +119,6 @@ export class TasksService {
     return new Map(rows.map((r) => [r._id.toString(), r.count]));
   }
 
-  @OnEvent(PROJECT_DELETED_EVENT)
   async handleProjectDeleted(payload: ProjectDeletedPayload): Promise<void> {
     await this.taskModel
       .deleteMany({ project: new Types.ObjectId(payload.projectId) })

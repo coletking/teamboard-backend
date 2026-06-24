@@ -18,7 +18,7 @@ monolith** with a clear path to microservices (see [Architecture](#architecture)
 | Validation      | `class-validator` / `class-transformer` DTOs        |
 | Config          | `@nestjs/config` + Joi env validation               |
 | Security        | Helmet, global rate limiting, NoSQL-injection guard |
-| Cross-module    | `@nestjs/event-emitter` (in-process pub/sub)        |
+| Cross-module    | **Redis pub/sub** (`ioredis`) + in-process fallback |
 | Tests           | Jest (unit)                                         |
 
 ---
@@ -174,6 +174,7 @@ docker compose up --build      # Mongo + API together
 | `JWT_SECRET`     | **yes**  | —                         | JWT signing secret (min 16 chars)        |
 | `JWT_EXPIRES_IN` | no       | `1d`                      | Token lifetime                           |
 | `DEFAULT_INVITE_PASSWORD` | no | `TeamBoard123!`        | Password for users created via invite    |
+| `REDIS_URL`      | no       | —                         | If set, events use Redis pub/sub (else in-process) |
 | `THROTTLE_TTL`   | no       | `60`                      | Rate-limit window (seconds)              |
 | `THROTTLE_LIMIT` | no       | `100`                     | Max requests per window per IP           |
 
@@ -207,8 +208,11 @@ exposes a narrow surface:
   **service** (e.g. `TasksModule` imports `ProjectsModule` and uses
   `ProjectsService.findOneForOwner` for authorization).
 - Cross-cutting reactions are **event-driven**, not direct calls: deleting a
-  project emits a `project.deleted` event and `TasksService` reacts to it. This
-  is the same shape a message broker would take across services.
+  project publishes a `project.deleted` event on the `EventBus` and
+  `TasksService` reacts to it. The `EventBus` uses **Redis pub/sub** when
+  `REDIS_URL` is set (a real broker that works across separate services) and
+  falls back to an in-process dispatch otherwise — so the same code runs locally
+  without Redis.
 
 ### Path to microservices
 
@@ -217,7 +221,7 @@ exposes a narrow surface:
 | `AuthModule` + `UsersModule`                  | **AuthService** (owns users + token issuance)                  |
 | `ProjectsModule`                              | **ProjectService**                                             |
 | `TasksModule`                                 | **TaskService**                                                |
-| In-process `EventEmitter2` (`project.deleted`)| Replace with **RabbitMQ / Redis pub-sub** — same event names   |
+| `EventBus` over **Redis pub/sub** (`project.deleted`)| Already broker-based — point services at the same Redis/channel |
 | Direct `ProjectsService` call for auth checks | Replace with an **API Gateway** + service-to-service call/JWT  |
 
 Because the boundaries already exist, extraction is mostly transport changes,

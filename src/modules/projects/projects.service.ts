@@ -7,7 +7,6 @@ import {
 } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { ConfigService } from '@nestjs/config';
-import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Model, Types } from 'mongoose';
 import {
   Project,
@@ -17,11 +16,11 @@ import {
 import { CreateProjectDto } from '../../dto/projects/create-project.dto';
 import { UpdateProjectDto } from '../../dto/projects/update-project.dto';
 import { UsersService } from '../users/users.service';
-
-export const PROJECT_DELETED_EVENT = 'project.deleted';
-export interface ProjectDeletedPayload {
-  projectId: string;
-}
+import { EventBus } from '../../events/event-bus.service';
+import {
+  PROJECT_DELETED_EVENT,
+  ProjectDeletedPayload,
+} from '../../events/events.constants';
 
 export interface MemberView {
   id: string;
@@ -37,7 +36,7 @@ export class ProjectsService {
     private readonly projectModel: Model<ProjectDocument>,
     private readonly usersService: UsersService,
     private readonly config: ConfigService,
-    private readonly eventEmitter: EventEmitter2,
+    private readonly eventBus: EventBus,
   ) {}
 
   create(ownerId: string, dto: CreateProjectDto): Promise<ProjectDocument> {
@@ -93,7 +92,7 @@ export class ProjectsService {
     const project = await this.findForAdmin(id, userId);
     await project.deleteOne();
 
-    this.eventEmitter.emit(PROJECT_DELETED_EVENT, {
+    await this.eventBus.publish(PROJECT_DELETED_EVENT, {
       projectId: id,
     } satisfies ProjectDeletedPayload);
     return { id, deleted: true };

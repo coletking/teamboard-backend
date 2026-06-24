@@ -27,7 +27,7 @@ codebase and answer "why did you do it this way?".
 | File | What it does |
 | ---- | ------------ |
 | `src/main.ts` | **Entry point.** Boots the Nest app and registers global, app-wide concerns: `helmet` (secure headers), the NoSQL-injection sanitizer, CORS, the global `/api` route prefix, the global `ValidationPipe` (DTO validation), and the global exception filter. Then starts listening on the configured port. |
-| `src/app.module.ts` | **Root module.** Wires everything together: loads config globally, opens the Mongo connection, configures the rate-limiter (`ThrottlerModule`) and the in-process event bus (`EventEmitterModule`), and imports every feature module. Also registers the throttler as a global guard. |
+| `src/app.module.ts` | **Root module.** Wires everything together: loads config globally, opens the Mongo connection, configures the rate-limiter (`ThrottlerModule`) and the `EventsModule` (Redis/in-process event bus), and imports every feature module. Also registers the throttler as a global guard. |
 | `src/health.controller.ts` | A tiny public `GET /api/health` endpoint returning `{ status: 'ok' }`. Used by Docker/uptime checks to confirm the app is alive. |
 | `src/config/configuration.ts` | Turns raw environment variables into a **typed config object** (`port`, `mongoUri`, `jwt.*`, `throttle.*`, `defaultInvitePassword`). Everything reads config through this, never `process.env` directly. |
 | `src/config/env.validation.ts` | A **Joi schema** that validates the environment on boot. If `MONGO_URI` or `JWT_SECRET` is missing/invalid the app refuses to start — failing fast instead of at request time. |
@@ -43,6 +43,14 @@ codebase and answer "why did you do it this way?".
 | `src/common/filters/all-exceptions.filter.ts` | A global **exception filter** that converts any thrown error into a consistent JSON shape (`statusCode`, `path`, `timestamp`, `message`) and logs unexpected 5xx errors with their stack. |
 | `src/common/middleware/mongo-sanitize.middleware.ts` | Express middleware that strips MongoDB operator keys (`$gt`, `$where`, dotted keys) from the request **body and params** — defending against NoSQL operator injection (e.g. a login of `{ "email": { "$gt": "" } }`). |
 | `src/common/utils/password.util.ts` | Two helpers — `hashPassword` and `comparePassword` — wrapping bcrypt. A single source of truth for password hashing, reused by signup and by project invites. |
+
+## Events (pub/sub bus)
+
+| File | What it does |
+| ---- | ------------ |
+| `src/events/event-bus.service.ts` | A small `EventBus`. When `REDIS_URL` is set it publishes/subscribes domain events over **Redis pub/sub** (`ioredis`, channel `teamboard:events`); otherwise it dispatches in-process. `publish(event, payload)` sends; `on(event, handler)` registers a listener. |
+| `src/events/events.constants.ts` | Shared event name (`project.deleted`) and its payload type — imported by both publisher and subscriber so the contract is typed. |
+| `src/events/events.module.ts` | `@Global()` module exposing `EventBus` everywhere without per-module imports. |
 
 ---
 
@@ -112,7 +120,7 @@ a **service** (business logic). Controllers stay thin; all logic is in services.
 | File | What it does |
 | ---- | ------------ |
 | `tasks.controller.ts` | Create/list under `/projects/:projectId/tasks`; get/update/delete under `/tasks/:id`. |
-| `tasks.service.ts` | Task CRUD, each gated by **project membership** (via `ProjectsService.findForMember`). Also provides aggregation helpers for the dashboard (`countByStatusForProjects`, `countPerProject`) and an `@OnEvent('project.deleted')` handler that deletes a project's tasks (the cascade). |
+| `tasks.service.ts` | Task CRUD, each gated by **project membership** (via `ProjectsService.findForMember`). Also provides aggregation helpers for the dashboard (`countByStatusForProjects`, `countPerProject`) and, in `onModuleInit`, subscribes to the `project.deleted` event on the `EventBus` to delete a project's tasks (the cascade). |
 | `tasks.module.ts` | Registers the Task model, imports `ProjectsModule` (for membership checks), and exports `TasksService` for the dashboard. |
 | `tasks.service.spec.ts` | Unit tests: create verifies membership first, a non-member is blocked, invalid ids 404, and the project-deleted handler removes the right tasks. |
 
@@ -131,8 +139,9 @@ a **service** (business logic). Controllers stay thin; all logic is in services.
 - **Why modular monolith?** Fast to build/deploy now; boundaries already exist
   so each module can become a service later. See `README.md` → Architecture.
 - **How is the "microservice path" real?** Modules only talk through exported
-  **services** and an **event bus**. Swap the in-process `EventEmitter2` for
-  RabbitMQ/Redis and add a gateway, and the modules barely change.
+  **services** and an **event bus**. The bus already uses Redis pub/sub, so the
+  events cross process boundaries today — splitting a module into its own service
+  (and adding a gateway) leaves the publish/subscribe code unchanged.
 - **How is authorization done?** Centrally in `ProjectsService`: `findForMember`
   (any role) and `findForAdmin` (admin only). Tasks reuse `findForMember`; member
   management uses `findForAdmin`.

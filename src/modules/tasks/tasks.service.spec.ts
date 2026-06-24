@@ -5,6 +5,7 @@ import { Types } from 'mongoose';
 import { TasksService } from './tasks.service';
 import { Task } from '../../schemas/tasks/task.schema';
 import { ProjectsService } from '../projects/projects.service';
+import { EventBus } from '../../events/event-bus.service';
 
 describe('TasksService', () => {
   let tasksService: TasksService;
@@ -26,6 +27,7 @@ describe('TasksService', () => {
         TasksService,
         { provide: getModelToken(Task.name), useValue: taskModel },
         { provide: ProjectsService, useValue: projects },
+        { provide: EventBus, useValue: { on: jest.fn(), publish: jest.fn() } },
       ],
     }).compile();
 

@@ -13,6 +13,18 @@ services:
       timeout: 5s
       retries: 5
 
+  redis:
+    image: redis:7-alpine
+    container_name: teamboard-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   api:
     build: .
     container_name: teamboard-api
@@ -20,11 +32,14 @@ services:
     depends_on:
       mongo:
         condition: service_healthy
+      redis:
+        condition: service_healthy
     environment:
       NODE_ENV: production
       PORT: 3000
-      # Inside the compose network the host is the service name "mongo".
+      # Inside the compose network the host is the service name.
       MONGO_URI: mongodb://mongo:27017/teamboard
+      REDIS_URL: redis://redis:6379
       JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-in-prod-0123456789}
       JWT_EXPIRES_IN: 1d
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
