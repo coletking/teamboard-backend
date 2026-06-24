@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { User, UserDocument } from '../../schemas/users/user.schema';
 import { hashPassword } from '../../common/utils/password.util';
+
+/** MongoDB duplicate-key error code (e.g. violating the unique email index). */
+const DUPLICATE_KEY = 11000;
 
 interface CreateUserInput {
   name: string;
@@ -24,11 +27,20 @@ export class UsersService {
 
   async create(input: CreateUserInput): Promise<UserDocument> {
     const passwordHash = await hashPassword(input.password);
-    return this.userModel.create({
-      name: input.name,
-      email: input.email,
-      passwordHash,
-    });
+    try {
+      return await this.userModel.create({
+        name: input.name,
+        email: input.email,
+        passwordHash,
+      });
+    } catch (error) {
+      // The unique index on `email` is the source of truth — translate a
+      // duplicate-key race into a clean 409 instead of a 500.
+      if ((error as { code?: number }).code === DUPLICATE_KEY) {
+        throw new ConflictException('Email is already registered');
+      }
+      throw error;
+    }
   }
 
   /** Look up by email; pass `withPassword` when the hash is needed for login. */

@@ -28,18 +28,18 @@ export type ProjectDocument = HydratedDocument<Project>;
 @Schema({ timestamps: true })
 export class Project {
   @Prop({ required: true, trim: true })
-  name: string;
+  name!: string;
 
   @Prop({ default: '', trim: true })
-  description: string;
+  description!: string;
 
   /** The creator of the project — always also an ADMIN member. */
   @Prop({ type: Types.ObjectId, ref: 'User', required: true, index: true })
-  owner: Types.ObjectId;
+  owner!: Types.ObjectId;
 
   /** Everyone with access to the project, each with a role. */
   @Prop({ type: [ProjectMemberSchema], default: [] })
-  members: ProjectMember[];
+  members!: ProjectMember[];
 }
 
 export const ProjectSchema = SchemaFactory.createForClass(Project);

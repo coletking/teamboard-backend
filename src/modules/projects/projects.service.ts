@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   ForbiddenException,
   Injectable,
@@ -146,6 +147,10 @@ export class ProjectsService {
       email,
       defaultPassword,
     );
+    // An admin is already a member — block inviting yourself with a clear error.
+    if (user.id === adminId) {
+      throw new BadRequestException('You cannot invite yourself');
+    }
     if (this.isMember(project, user.id)) {
       throw new ConflictException('User is already a member of this project');
     }
