@@ -1,0 +1,37 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: teamboard-mongo
+    restart: unless-stopped
+    ports:
+      - '27017:27017'
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ['CMD', 'mongosh', '--eval', "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    container_name: teamboard-api
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      # Inside the compose network the host is the service name "mongo".
+      MONGO_URI: mongodb://mongo:27017/teamboard
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-change-in-prod-0123456789}
+      JWT_EXPIRES_IN: 1d
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      THROTTLE_TTL: 60
+      THROTTLE_LIMIT: 100
+    ports:
+      - '3000:3000'
+
+volumes:
+  mongo_data:
