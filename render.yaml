@@ -1,0 +1,31 @@
+# Render Blueprint — deploy the TeamBoard backend as a web service.
+# In Render: New + → Blueprint → connect this repo. It reads this file.
+services:
+  - type: web
+    name: teamboard-backend
+    runtime: node
+    plan: free
+    region: oregon
+    branch: main
+    buildCommand: npm install && npm run build
+    startCommand: node dist/main.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      # Render injects PORT automatically; the app reads process.env.PORT.
+      - key: JWT_SECRET
+        generateValue: true # Render generates a long random secret
+      - key: JWT_EXPIRES_IN
+        value: 1d
+      - key: DEFAULT_INVITE_PASSWORD
+        value: TeamBoard123!
+      - key: THROTTLE_TTL
+        value: '60'
+      - key: THROTTLE_LIMIT
+        value: '100'
+      # Set these two manually in the dashboard (sync:false = not in git):
+      - key: MONGO_URI
+        sync: false # paste your MongoDB Atlas SRV connection string
+      - key: CORS_ORIGIN
+        sync: false # set to your deployed frontend URL once it exists
