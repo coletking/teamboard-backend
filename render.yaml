@@ -7,7 +7,9 @@ services:
     plan: free
     region: oregon
     branch: main
-    buildCommand: npm install && npm run build
+    # --include=dev forces devDependencies (nest cli, typescript) to install
+    # even though NODE_ENV=production, which they are needed for the build.
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: node dist/main.js
     healthCheckPath: /api/health
     envVars:
