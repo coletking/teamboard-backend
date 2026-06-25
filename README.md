@@ -14,7 +14,7 @@ monolith** with a clear path to microservices (see [Architecture](#architecture)
 | --------------- | --------------------------------------------------- |
 | Framework       | NestJS 11 (TypeScript)                               |
 | Database        | MongoDB via Mongoose                                 |
-| Auth            | JWT (Passport `passport-jwt`) + bcrypt              |
+| Auth            | JWT in an **httpOnly cookie** (passport-jwt) + bcrypt |
 | Validation      | `class-validator` / `class-transformer` DTOs        |
 | Config          | `@nestjs/config` + Joi env validation               |
 | Security        | Helmet, global rate limiting, NoSQL-injection guard |
@@ -114,7 +114,11 @@ Base URL: `http://localhost:3000/api`
 | ------ | ------------ | ----------------------------------------------------- |
 | GET    | `/dashboard` | Stats: project/task counts, by-status, per-project    |
 
-Authenticated requests must send `Authorization: Bearer <accessToken>`.
+On signup/login the API sets an **httpOnly `access_token` cookie** (sent
+automatically by the browser with `credentials`). For non-browser clients
+(Postman/curl) a `Authorization: Bearer <token>` header is also accepted —
+the cookie is just stripped from the body, so use the JWT the cookie carries or
+keep a browser session. `POST /auth/logout` clears the cookie.
 
 ---
 

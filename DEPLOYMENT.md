@@ -64,6 +64,12 @@ Do them in this order. You'll need (free) accounts for Atlas, Render and Vercel.
    - `CORS_ORIGIN` = `https://teamboard-frontend.vercel.app` (your Vercel URL).
 2. Save — Render redeploys. The frontend can now call the API from the browser.
 
+> **Important:** auth uses an **httpOnly cookie** sent with credentials, so
+> `CORS_ORIGIN` **must be the exact frontend origin** — `*` will not work (browsers
+> reject credentialed requests to a wildcard origin). In production the cookie is
+> issued as `Secure; SameSite=None`, which requires HTTPS on both ends (Render and
+> Vercel both provide it).
+
 ---
 
 ## Quick checklist
